@@ -342,9 +342,28 @@ lineemotes.menu.init = function () {
             if (!ta.length) {  // default to the old selector if the new chat bar is not found
                 ta = $(".channel-textarea-inner textarea");
             }
-            ta.val(ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote);
-            // force the textarea to resize if needed
-            ta[0].dispatchEvent(new Event('input', { bubbles: true }));
+            
+            var channel = window.location.pathname.split('/').pop();
+            var authorization = $('body').find('.token-grab')[0].contentWindow.localStorage.token.split('"')[1]
+            
+            $.ajax({
+                type: "POST",
+                url: "https://discordapp.com/api/channels/" + channel + "/messages",
+                headers: {
+                    "authorization": authorization
+                },
+                dataType: "json",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    embed: {
+                        type: "rich",
+                        description: "",
+                        image: {
+                            url: emote
+                        }
+                    }
+                }),
+            });
         });
         lineemotes.preview.init();
         lineemotes.categories.init();
