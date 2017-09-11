@@ -116,7 +116,7 @@ lineemotes.menu.init = function () {
             }
             
             var channel = window.location.pathname.split('/').pop();
-            var authorization = $('body').find('.token-grab')[0].contentWindow.localStorage.token.split('"')[1]
+            const authorization = document.body.appendChild(document.createElement`iframe`).contentWindow.localStorage.token.replace(/"/g, "");
             
             $.ajax({
                 type: "POST",
