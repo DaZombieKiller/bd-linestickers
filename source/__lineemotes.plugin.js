@@ -34,11 +34,14 @@ lineemotes.prototype.onSwitch = function () {
 
 lineemotes.prototype.settings = function () {};
 lineemotes.prototype.settings.toggleHide = function () {
-    console.log('toggling hide');
-    if (document.getElementById('line-settings-hideurl').checked) {
+    let checked = bdPluginStorage.get(lineemotes.storage.getName(), 'hideURLs')
+    lineemotes.log(`Toggling hide, was ${checked}`)
+    if (!checked) {
         bdPluginStorage.set(lineemotes.storage.getName(), 'hideURLs', true);
+        $('#line-settings-hideurl').parent().find('.ui-switch').addClass('checked')
     } else {
         bdPluginStorage.set(lineemotes.storage.getName(), 'hideURLs', false);
+        $('#line-settings-hideurl').parent().find('.ui-switch').removeClass('checked')
     }
 };
 
@@ -59,6 +62,8 @@ lineemotes.prototype.getSettingsPanel = function () {
 
     let div = document.createElement('div');
     div.classList.add('ui-switch');
+    if (bdPluginStorage.get(lineemotes.storage.getName(), 'hideURLs'))
+        div.classList.add('checked');
 
     toggle.appendChild(input);
     toggle.appendChild(div);
@@ -97,8 +102,15 @@ lineemotes.prototype.getLocalizationStrings = function () {
 
 //logger function, outputs console message in '[Line Stickers] <message>' format
 lineemotes.log = (message) => console.log(`[${lineemotes.prototype.getName()}] ${message}`);
+lineemotes.getBDRepo = () => {
+    var script_url = $("script[src*='BetterDiscordApp']").attr('src').split('/')
+    if (script_url[4] !== 'BetterDiscordApp')
+        throw ReferenceError(`Error in getBDRepo(), expected 'BetterDiscordApp', found '${script_url[4]}'`)
+    return script_url[3]
+};
 
 lineemotes.prototype.getName = () => "Line Stickers";
 lineemotes.prototype.getDescription = () => "Extends emote menu to add Line stickers.";
 // lineemotes.prototype.getVersion = () => "0.6.3";
 lineemotes.prototype.getAuthor = () => "Awakening";
+

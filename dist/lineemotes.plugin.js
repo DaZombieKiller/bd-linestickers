@@ -34,11 +34,14 @@ lineemotes.prototype.onSwitch = function () {
 
 lineemotes.prototype.settings = function () {};
 lineemotes.prototype.settings.toggleHide = function () {
-    console.log('toggling hide');
-    if (document.getElementById('line-settings-hideurl').checked) {
+    let checked = bdPluginStorage.get(lineemotes.storage.getName(), 'hideURLs')
+    lineemotes.log(`Toggling hide, was ${checked}`)
+    if (!checked) {
         bdPluginStorage.set(lineemotes.storage.getName(), 'hideURLs', true);
+        $('#line-settings-hideurl').parent().find('.ui-switch').addClass('checked')
     } else {
         bdPluginStorage.set(lineemotes.storage.getName(), 'hideURLs', false);
+        $('#line-settings-hideurl').parent().find('.ui-switch').removeClass('checked')
     }
 };
 
@@ -59,6 +62,8 @@ lineemotes.prototype.getSettingsPanel = function () {
 
     let div = document.createElement('div');
     div.classList.add('ui-switch');
+    if (bdPluginStorage.get(lineemotes.storage.getName(), 'hideURLs'))
+        div.classList.add('checked');
 
     toggle.appendChild(input);
     toggle.appendChild(div);
@@ -97,11 +102,18 @@ lineemotes.prototype.getLocalizationStrings = function () {
 
 //logger function, outputs console message in '[Line Stickers] <message>' format
 lineemotes.log = (message) => console.log(`[${lineemotes.prototype.getName()}] ${message}`);
+lineemotes.getBDRepo = () => {
+    var script_url = $("script[src*='BetterDiscordApp']").attr('src').split('/')
+    if (script_url[4] !== 'BetterDiscordApp')
+        throw ReferenceError(`Error in getBDRepo(), expected 'BetterDiscordApp', found '${script_url[4]}'`)
+    return script_url[3]
+};
 
 lineemotes.prototype.getName = () => "Line Stickers";
 lineemotes.prototype.getDescription = () => "Extends emote menu to add Line stickers.";
 // lineemotes.prototype.getVersion = () => "0.6.3";
 lineemotes.prototype.getAuthor = () => "Awakening";
+
 
 lineemotes.categories = function() {}
 
@@ -136,7 +148,14 @@ lineemotes.categories.buildContainer = function() {
     </button>
 </div>
 <div class="categories-container">
-  <div class="categories-wrapper"><div class="item"><div class="add-pack icon-plus"></div></div>${categories}</div>
+    <div class="categories-wrapper">
+        <div class="item add-pack-button">
+            <svg class="add-pack" width="20" height="20" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"></path>
+            </svg>
+        </div>
+        ${categories}
+    </div>
 </div>
 `;
     return container;
@@ -230,146 +249,266 @@ lineemotes.menu = function () {}
 
 lineemotes.menu.init = function () {
     quickEmoteMenu.lsContainer = this.buildContainer();
-
-    // overriding
-    // adding line tab into the callback function
-    QuickEmoteMenu.prototype.obsCallback = function(e) {
-        // Emotes - Show Discord emoji menu
-        if (!settingsCookie["bda-es-9"])
-            e.addClass("bda-qme-hidden");
-         else
-            e.removeClass("bda-qme-hidden");
-
-        var self = this;
-
-        // rebuild container if the language was changed
-        var localization_strings = lineemotes.prototype.getLocalizationStrings();
-        if (this.locale === undefined) {
-            this.locale = document.children[0].getAttribute('lang');
-        } else if (this.locale !== document.children[0].getAttribute('lang')) {
-            lineemotes.log('Language changed, rebuilding container to reflect changes')
-            this.locale = document.children[0].getAttribute('lang');
-            this.lsContainer = lineemotes.menu.buildContainer();
-        }
-
-        // avoid unnecessary whitespace
-        var qmeHeader = `<div id="bda-qem">`
-        qmeHeader += `<button class="active" id="bda-qem-twitch" onclick='quickEmoteMenu.switchHandler(this); return false;'>Twitch</button>`
-        qmeHeader += `<button id="bda-qem-favourite" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-favourite']}</button>`
-        qmeHeader += `<button id="bda-qem-emojis" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-emojis']}</button>`
-        qmeHeader += `<button id="bda-qem-line" onclick="quickEmoteMenu.switchHandler(this); return false;">${localization_strings['bda-qem-line']}</button>`
-        qmeHeader += `<div>`
-        e.prepend(qmeHeader);
-
-        // Emotes - Show Twitch/Favourite
-        if (settingsCookie["bda-es-0"]) {
-            e.append(this.teContainer);
-            e.append(this.faContainer);
-            e.removeClass("bda-qme-te-hidden");
-        } else {
-            e.addClass("bda-qme-te-hidden");
-        }
-
-        e.append(this.lsContainer);
-
-        // if twitch/favourite tab and discord emoji tab disabled
-        if ((!settingsCookie["bda-es-0"]) && (!settingsCookie["bda-es-9"]))
-            this.lastTab = "bda-qem-line";
-
-        // if twitch/favourite tab is disabled and the last open tab was one of them
-        if (((this.lastTab == 'bda-qem-emojis') || (this.lastTab == 'bda-qem-favourite')) && (!settingsCookie["bda-es-0"]))
-            this.lastTab = "bda-qem-emojis";
-
-        // if discord emoji tab is disabled and it was the last open tab
-        if ((this.latTab == 'bda-qem-emojis') && (!settingsCookie["bda-es-9"]))
-            this.lastTab = "bda-qem-favourite";
-
-        if (this.lastTab === undefined)
-            // if twitch tab is disabled, default to discord emoji tab
-            if (!settingsCookie["bda-es-0"])
-                this.lastTab = 'bda-qem-emojis';
+    
+    // band aid fix for compatibility with Zerebos fork
+    if (lineemotes.getBDRepo() === 'rauenzi') {
+        // overriding
+        // adding line tab into the callback function
+        QuickEmoteMenu.prototype.obsCallback = function(elem) {
+            var e = $(elem);
+            // Emotes - Show Discord emoji menu
+            if (!settingsCookie["bda-es-9"])
+                e.addClass("bda-qme-hidden");
             else
+                e.removeClass("bda-qme-hidden");
+
+            // rebuild container if the language was changed
+            var localization_strings = lineemotes.prototype.getLocalizationStrings();
+            if (this.locale === undefined) {
+                this.locale = document.children[0].getAttribute('lang');
+            } else if (this.locale !== document.children[0].getAttribute('lang')) {
+                lineemotes.log('Language changed, rebuilding container to reflect changes')
+                this.locale = document.children[0].getAttribute('lang');
+                this.lsContainer = lineemotes.menu.buildContainer();
+            }
+
+            // avoid unnecessary whitespace
+            var qmeHeader = `<div id="bda-qem">`
+            qmeHeader += `<button class="active" id="bda-qem-twitch" onclick='quickEmoteMenu.switchHandler(this); return false;'>Twitch</button>`
+            qmeHeader += `<button id="bda-qem-favourite" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-favourite']}</button>`
+            qmeHeader += `<button id="bda-qem-emojis" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-emojis']}</button>`
+            qmeHeader += `<button id="bda-qem-line" onclick="quickEmoteMenu.switchHandler(this); return false;">${localization_strings['bda-qem-line']}</button>`
+            qmeHeader += `<div>`
+            e.prepend(qmeHeader);
+
+            // Emotes - Show Twitch/Favourite
+            if (settingsCookie["bda-es-0"]) {
+                e.append(this.teContainer);
+                e.append(this.faContainer);
+                e.removeClass("bda-qme-te-hidden");
+            } else {
+                e.addClass("bda-qme-te-hidden");
+            }
+
+            e.append(this.lsContainer);
+
+            // if twitch/favourite tab and discord emoji tab disabled
+            if ((!settingsCookie["bda-es-0"]) && (!settingsCookie["bda-es-9"]))
+                this.lastTab = "bda-qem-line";
+
+            // if twitch/favourite tab is disabled and the last open tab was one of them
+            if (((this.lastTab == 'bda-qem-emojis') || (this.lastTab == 'bda-qem-favourite')) && (!settingsCookie["bda-es-0"]))
+                this.lastTab = "bda-qem-emojis";
+
+            // if discord emoji tab is disabled and it was the last open tab
+            if ((this.latTab == 'bda-qem-emojis') && (!settingsCookie["bda-es-9"]))
                 this.lastTab = "bda-qem-favourite";
 
-        this.switchQem(this.lastTab);
-    };
+            if (this.lastTab === undefined)
+                // if twitch tab is disabled, default to discord emoji tab
+                if (!settingsCookie["bda-es-0"])
+                    this.lastTab = 'bda-qem-emojis';
+                else
+                    this.lastTab = "bda-qem-favourite";
 
-    // initializing stuff,
-    // making the tab openable, copying sticker URL into text area on click, initializing on-hover preview
-    QuickEmoteMenu.prototype.switchQem = function(id) {
-        var twitch = $("#bda-qem-twitch");
-        var fav = $("#bda-qem-favourite");
-        var emojis = $("#bda-qem-emojis");
-        var line = $("#bda-qem-line");
-        twitch.removeClass("active");
-        fav.removeClass("active");
-        emojis.removeClass("active");
-        line.removeClass("active");
-        $(".emoji-picker").hide();
-        $("#bda-qem-favourite-container").hide();
-        $("#bda-qem-twitch-container").hide();
-        $("#bda-qem-line-container").hide();
-        switch (id) {
-        case "bda-qem-twitch":
-            twitch.addClass("active");
-            $("#bda-qem-twitch-container").show();
-            break;
-        case "bda-qem-favourite":
-            fav.addClass("active");
-            $("#bda-qem-favourite-container").show();
-            break;
-        case "bda-qem-emojis":
-            emojis.addClass("active");
-            $(".emoji-picker").show();
-            break
-        case "bda-qem-line":
-            line.addClass("active");
-            $("#bda-qem-line-container").show();
-        }
-        this.lastTab = id;
-        var emoteIcon = $(".emote-icon");
-        emoteIcon.off();
-        emoteIcon.on("click", function() {
-            // find out what tab we're dealing with
-            if ($(this).parent().parent().attr("class") === 'line-pack-stickers') {
-                // if dealing with line stickers tab, grab src
-                var emote = $(this).attr("src") // + '\n';
-            } else {
-                // otherwise grab title attribute
-                var emote = $(this).attr("title");
+            this.switchQem(this.lastTab);
+        };
+        // initializing stuff,
+        // making the tab openable, copying sticker URL into text area on click, initializing on-hover preview
+        QuickEmoteMenu.prototype.switchQem = function(id) {
+            var twitch = $("#bda-qem-twitch");
+            var fav = $("#bda-qem-favourite");
+            var emojis = $("#bda-qem-emojis");
+            var line = $("#bda-qem-line");
+            twitch.removeClass("active");
+            fav.removeClass("active");
+            emojis.removeClass("active");
+            line.removeClass("active");
+            $(".emoji-picker, .emojiPicker-3g68GS").hide();
+            $("#bda-qem-favourite-container").hide();
+            $("#bda-qem-twitch-container").hide();
+            $("#bda-qem-line-container").hide();
+            switch (id) {
+            case "bda-qem-twitch":
+                twitch.addClass("active");
+                $("#bda-qem-twitch-container").show();
+                break;
+            case "bda-qem-favourite":
+                fav.addClass("active");
+                $("#bda-qem-favourite-container").show();
+                break;
+            case "bda-qem-emojis":
+                emojis.addClass("active");
+                $(".emoji-picker, .emojiPicker-3g68GS").show();
+                    $(".emoji-picker .search-bar-inner input, .emojiPicker-3g68GS .search-bar-inner input").focus();
+                break
+            case "bda-qem-line":
+                line.addClass("active");
+                $("#bda-qem-line-container").show();
+                break
             }
-            var ta = $(".channel-text-area-default textarea"); // new chat bar
-            if (!ta.length) {  // default to the old selector if the new chat bar is not found
-                ta = $(".channel-textarea-inner textarea");
-            }
-            
-            var channel = window.location.pathname.split('/').pop();
-            const authorization = document.body.appendChild(document.createElement`iframe`).contentWindow.localStorage.token.replace(/"/g, "");
-            
-            $.ajax({
-                type: "POST",
-                url: "https://discordapp.com/api/channels/" + channel + "/messages",
-                headers: {
-                    "authorization": authorization
-                },
-                dataType: "json",
-                contentType: "application/json",
-                data: JSON.stringify({
-                    embed: {
-                        type: "rich",
-                        description: "",
-                        image: {
-                            url: emote
-                        }
-                    }
-                }),
+            this.lastTab = id;
+            var emoteIcon = $(".emote-icon");
+            emoteIcon.off();
+            emoteIcon.on("click", function() {
+                // find out what tab we're dealing with
+                if ($(this).parent().parent().attr("class") === 'line-pack-stickers') {
+                    // if dealing with line stickers tab, grab src
+                    var emote = $(this).attr("src") // + '\n';
+                } else {
+                    // otherwise grab title attribute
+                    var emote = $(this).attr("title");
+                }
+                var ta = utils.getTextArea();
+                utils.insertText(ta[0], ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote)
+                // force the textarea to resize if needed
+                ta[0].dispatchEvent(new Event('input', { bubbles: true }));
+                
             });
-        });
-        lineemotes.preview.init();
-        lineemotes.categories.init();
-        lineemotes.confirm.init();
-        lineemotes.menu.resize();
-    };
+            lineemotes.preview.init();
+            lineemotes.categories.init();
+            lineemotes.confirm.init();
+            lineemotes.menu.resize();
+        };
+    } else {
+        // overriding
+        // adding line tab into the callback function
+        QuickEmoteMenu.prototype.obsCallback = function(e) {
+            // Emotes - Show Discord emoji menu
+            if (!settingsCookie["bda-es-9"])
+                e.addClass("bda-qme-hidden");
+             else
+                e.removeClass("bda-qme-hidden");
+    
+            var self = this;
+    
+            // rebuild container if the language was changed
+            var localization_strings = lineemotes.prototype.getLocalizationStrings();
+            if (this.locale === undefined) {
+                this.locale = document.children[0].getAttribute('lang');
+            } else if (this.locale !== document.children[0].getAttribute('lang')) {
+                lineemotes.log('Language changed, rebuilding container to reflect changes')
+                this.locale = document.children[0].getAttribute('lang');
+                this.lsContainer = lineemotes.menu.buildContainer();
+            }
+    
+            // avoid unnecessary whitespace
+            var qmeHeader = `<div id="bda-qem">`
+            qmeHeader += `<button class="active" id="bda-qem-twitch" onclick='quickEmoteMenu.switchHandler(this); return false;'>Twitch</button>`
+            qmeHeader += `<button id="bda-qem-favourite" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-favourite']}</button>`
+            qmeHeader += `<button id="bda-qem-emojis" onclick='quickEmoteMenu.switchHandler(this); return false;'>${localization_strings['bda-qem-emojis']}</button>`
+            qmeHeader += `<button id="bda-qem-line" onclick="quickEmoteMenu.switchHandler(this); return false;">${localization_strings['bda-qem-line']}</button>`
+            qmeHeader += `<div>`
+            e.prepend(qmeHeader);
+    
+            // Emotes - Show Twitch/Favourite
+            if (settingsCookie["bda-es-0"]) {
+                e.append(this.teContainer);
+                e.append(this.faContainer);
+                e.removeClass("bda-qme-te-hidden");
+            } else {
+                e.addClass("bda-qme-te-hidden");
+            }
+    
+            e.append(this.lsContainer);
+    
+            // if twitch/favourite tab and discord emoji tab disabled
+            if ((!settingsCookie["bda-es-0"]) && (!settingsCookie["bda-es-9"]))
+                this.lastTab = "bda-qem-line";
+    
+            // if twitch/favourite tab is disabled and the last open tab was one of them
+            if (((this.lastTab == 'bda-qem-emojis') || (this.lastTab == 'bda-qem-favourite')) && (!settingsCookie["bda-es-0"]))
+                this.lastTab = "bda-qem-emojis";
+    
+            // if discord emoji tab is disabled and it was the last open tab
+            if ((this.latTab == 'bda-qem-emojis') && (!settingsCookie["bda-es-9"]))
+                this.lastTab = "bda-qem-favourite";
+    
+            if (this.lastTab === undefined)
+                // if twitch tab is disabled, default to discord emoji tab
+                if (!settingsCookie["bda-es-0"])
+                    this.lastTab = 'bda-qem-emojis';
+                else
+                    this.lastTab = "bda-qem-favourite";
+    
+            this.switchQem(this.lastTab);
+        };    
+        // initializing stuff,
+        // making the tab openable, copying sticker URL into text area on click, initializing on-hover preview
+        QuickEmoteMenu.prototype.switchQem = function(id) {
+            var twitch = $("#bda-qem-twitch");
+            var fav = $("#bda-qem-favourite");
+            var emojis = $("#bda-qem-emojis");
+            var line = $("#bda-qem-line");
+            twitch.removeClass("active");
+            fav.removeClass("active");
+            emojis.removeClass("active");
+            line.removeClass("active");
+            $(".emoji-picker").hide();
+            $("#bda-qem-favourite-container").hide();
+            $("#bda-qem-twitch-container").hide();
+            $("#bda-qem-line-container").hide();
+            switch (id) {
+            case "bda-qem-twitch":
+                twitch.addClass("active");
+                $("#bda-qem-twitch-container").show();
+                break;
+            case "bda-qem-favourite":
+                fav.addClass("active");
+                $("#bda-qem-favourite-container").show();
+                break;
+            case "bda-qem-emojis":
+                emojis.addClass("active");
+                $(".emoji-picker").show();
+                break
+            case "bda-qem-line":
+                line.addClass("active");
+                $("#bda-qem-line-container").show();
+            }
+            this.lastTab = id;
+            var emoteIcon = $(".emote-icon");
+            emoteIcon.off();
+            emoteIcon.on("click", function() {
+                // find out what tab we're dealing with
+                if ($(this).parent().parent().attr("class") === 'line-pack-stickers') {
+                    // if dealing with line stickers tab, grab src
+                    var emote = $(this).attr("src") // + '\n';
+                } else {
+                    // otherwise grab title attribute
+                    var emote = $(this).attr("title");
+                }
+                var ta = $(".chat form textarea");
+                var text = ta.val().slice(-1) == " " ? emote : " " + emote
+                var channel = window.location.pathname.split('/').pop();
+				const authorization = document.body.appendChild(document.createElement`iframe`).contentWindow.localStorage.token.replace(/"/g, "");
+
+				$.ajax({
+				    type: "POST",
+				    url: "https://discordapp.com/api/channels/" + channel + "/messages",
+				    headers: {
+				        "authorization": authorization
+				    },
+				    dataType: "json",
+				    contentType: "application/json",
+				    data: JSON.stringify({
+				        embed: {
+				            type: "rich",
+				            description: "",
+				            image: {
+				                url: emote
+				            }
+				        }
+				    }),
+				});
+            });
+            lineemotes.preview.init();
+            lineemotes.categories.init();
+            lineemotes.confirm.init();
+            lineemotes.menu.resize();
+        };
+    }
+
+    
 };
 
 lineemotes.menu.buildContainer = function () {
@@ -404,60 +543,118 @@ lineemotes.menu.rebuild = function () {
 
 lineemotes.menu.unload = function () {
     // reverting the overriden functions
-    QuickEmoteMenu.prototype.obsCallback = function(e) {
-        if (!settingsCookie["bda-es-9"]) {
-            e.addClass("bda-qme-hidden");
-        } else {
-            e.removeClass("bda-qme-hidden");
-        }
-        if (!settingsCookie["bda-es-0"])
-            return;
-        var self = this;
-        e.prepend(this.qmeHeader);
-        e.append(this.teContainer);
-        e.append(this.faContainer);
-        if (this.lastTab == undefined) {
-            this.lastTab = "bda-qem-favourite";
-        }
-        this.switchQem(this.lastTab);
-    };
-
-    QuickEmoteMenu.prototype.switchQem = function(id) {
-        var twitch = $("#bda-qem-twitch");
-        var fav = $("#bda-qem-favourite");
-        var emojis = $("#bda-qem-emojis");
-        twitch.removeClass("active");
-        fav.removeClass("active");
-        emojis.removeClass("active");
-        $(".emoji-picker").hide();
-        $("#bda-qem-favourite-container").hide();
-        $("#bda-qem-twitch-container").hide();
-        switch (id) {
-        case "bda-qem-twitch":
-            twitch.addClass("active");
-            $("#bda-qem-twitch-container").show();
-            break;
-        case "bda-qem-favourite":
-            fav.addClass("active");
-            $("#bda-qem-favourite-container").show();
-            break;
-        case "bda-qem-emojis":
-            emojis.addClass("active");
-            $(".emoji-picker").show();
-            break
-        }
-        this.lastTab = id;
-        var emoteIcon = $(".emote-icon");
-        emoteIcon.off();
-        emoteIcon.on("click", function() {
-            var emote = $(this).attr("title");
-            var ta = $(".channel-text-area-default textarea"); // new chat bar
-            if (!ta.length) {
-                ta = $(".channel-textarea-inner textarea")
+    if (lineemotes.getBDRepo() === 'rauenzi') {  // band aid fix for compatibility with Zerebos fork
+        QuickEmoteMenu.prototype.obsCallback = function (elem) {
+            var e = $(elem);
+            if(!settingsCookie["bda-es-9"]) {
+                e.addClass("bda-qme-hidden");
+            } else {
+                e.removeClass("bda-qme-hidden");
             }
-            ta.val(ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote);
-        });
-    };
+        
+            if(!settingsCookie["bda-es-0"]) return;
+        
+            e.prepend(this.qmeHeader);
+            e.append(this.teContainer);
+            e.append(this.faContainer);
+        
+            if(this.lastTab == undefined) {
+                this.lastTab = "bda-qem-favourite";
+            } 
+            this.switchQem(this.lastTab);
+        };
+        QuickEmoteMenu.prototype.switchQem = function (id) {
+            var twitch = $("#bda-qem-twitch");
+            var fav = $("#bda-qem-favourite");
+            var emojis = $("#bda-qem-emojis");
+            twitch.removeClass("active");
+            fav.removeClass("active");
+            emojis.removeClass("active");
+        
+            $(".emoji-picker, .emojiPicker-3g68GS").hide();
+            $("#bda-qem-favourite-container").hide();
+            $("#bda-qem-twitch-container").hide();
+        
+            switch(id) {
+                case "bda-qem-twitch":
+                    twitch.addClass("active");
+                    $("#bda-qem-twitch-container").show();
+                break;
+                case "bda-qem-favourite":
+                    fav.addClass("active");
+                    $("#bda-qem-favourite-container").show();
+                break;
+                case "bda-qem-emojis":
+                    emojis.addClass("active");
+                    $(".emoji-picker, .emojiPicker-3g68GS").show();
+                    $(".emoji-picker .search-bar-inner input, .emojiPicker-3g68GS .search-bar-inner input").focus();
+                break;
+            }
+            this.lastTab = id;
+        
+            var emoteIcon = $(".emote-icon");
+            emoteIcon.off();
+            emoteIcon.on("click", function () {
+                var emote = $(this).attr("title");
+                var ta = utils.getTextArea();
+                utils.insertText(ta[0], ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote);
+            });
+        };
+    } else {
+        QuickEmoteMenu.prototype.obsCallback = function(e) {
+            if (!settingsCookie["bda-es-9"]) {
+                e.addClass("bda-qme-hidden");
+            } else {
+                e.removeClass("bda-qme-hidden");
+            }
+            if (!settingsCookie["bda-es-0"])
+                return;
+            var self = this;
+            e.prepend(this.qmeHeader);
+            e.append(this.teContainer);
+            e.append(this.faContainer);
+            if (this.lastTab == undefined) {
+                this.lastTab = "bda-qem-favourite";
+            }
+            this.switchQem(this.lastTab);
+        };
+
+        QuickEmoteMenu.prototype.switchQem = function(id) {
+            var twitch = $("#bda-qem-twitch");
+            var fav = $("#bda-qem-favourite");
+            var emojis = $("#bda-qem-emojis");
+            twitch.removeClass("active");
+            fav.removeClass("active");
+            emojis.removeClass("active");
+            $(".emoji-picker").hide();
+            $("#bda-qem-favourite-container").hide();
+            $("#bda-qem-twitch-container").hide();
+            switch (id) {
+            case "bda-qem-twitch":
+                twitch.addClass("active");
+                $("#bda-qem-twitch-container").show();
+                break;
+            case "bda-qem-favourite":
+                fav.addClass("active");
+                $("#bda-qem-favourite-container").show();
+                break;
+            case "bda-qem-emojis":
+                emojis.addClass("active");
+                $(".emoji-picker").show();
+                break;
+            }
+            this.lastTab = id;
+            var emoteIcon = $(".emote-icon");
+            emoteIcon.off();
+            emoteIcon.on("click", function() {
+                var emote = $(this).attr("title");
+                var ta = $(".channel-text-area-default textarea");
+                ta.val(ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote);
+            });
+        }
+    }
+    
+    
 
     // setting the last opened tab to emoji tab
     quickEmoteMenu.lastTab = "bda-qem-emojis"
@@ -550,8 +747,10 @@ lineemotes.menu.appendPack = function(id) {
                 // otherwise grab title attribute
                 var emote = $(this).attr("title");
             }
-            var ta = $(".channel-textarea-inner textarea");
-            ta.val(ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote);
+            var ta = $(".chat form textarea");
+            var text = ta.val().slice(-1) == " " ? emote : " " + emote
+            ta.focus();
+            document.execCommand("insertText", false, text);
         });
 
     // enable deletion
@@ -1102,7 +1301,7 @@ var stylesheet = `#bda-qem-line-container .icon-plus {
     flex-grow: 1; }
   #bda-qem-line-container .add-form .line-add-button {
     top: 1px;
-    width: 42px;
+    width: 35px;
     height: auto;
     padding: 0px;
     border-radius: 3px;
@@ -1289,9 +1488,22 @@ var stylesheet = `#bda-qem-line-container .icon-plus {
       color: #ad0000; }
     #bda-qem-line-container .confirm .no:hover {
       color: #98aab6; }
-  #bda-qem-line-container .add-pack {
-    opacity: 0.5; }
+  #bda-qem-line-container .categories-container .categories-wrapper .item.add-pack-button {
+    filter: unset; }
+  #bda-qem-line-container .add-pack-button {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    margin-right: 5px; }
+  #bda-qem-line-container .add-pack-button > svg {
+    position: absolute;
+    top: 13px; }
+  #bda-qem-line-container .add-pack-button > svg > path {
+    opacity: 0.5;
+    fill: #8c8c8c; }
+  #bda-qem-line-container .add-pack-button > svg > path:hover {
+    opacity: 1; }
 ` 
 return "<style>" + stylesheet + "</style>"; 
 };
-lineemotes.prototype.getVersion = () => "0.6.6";
+lineemotes.prototype.getVersion = () => "0.6.9a";
