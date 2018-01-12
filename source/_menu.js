@@ -359,11 +359,28 @@ lineemotes.menu.init = function () {
                     // otherwise grab title attribute
                     var emote = $(this).attr("title");
                 }
-                var ta = utils.getTextArea();
-                utils.insertText(ta[0], ta.val().slice(-1) == " " ? ta.val() + emote : ta.val() + " " + emote)
-                // force the textarea to resize if needed
-                ta[0].dispatchEvent(new Event('input', { bubbles: true }));
-                
+
+                var channel = window.location.pathname.split('/').pop();
+                const authorization = document.body.appendChild(document.createElement`iframe`).contentWindow.localStorage.token.replace(/"/g, "");
+
+                $.ajax({
+                    type: "POST",
+                    url: "https://discordapp.com/api/channels/" + channel + "/messages",
+                    headers: {
+                        "authorization": authorization
+                    },
+                    dataType: "json",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        embed: {
+                            type: "rich",
+                            description: "",
+                            image: {
+                                url: emote
+                            }
+                        }
+                    }),
+                });
             });
             lineemotes.preview.init();
             lineemotes.categories.init();
@@ -477,8 +494,7 @@ lineemotes.menu.init = function () {
                     // otherwise grab title attribute
                     var emote = $(this).attr("title");
                 }
-                var ta = $(".chat form textarea");
-                var text = ta.val().slice(-1) == " " ? emote : " " + emote
+
                 var channel = window.location.pathname.split('/').pop();
 				const authorization = document.body.appendChild(document.createElement`iframe`).contentWindow.localStorage.token.replace(/"/g, "");
 
