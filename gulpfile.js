@@ -5,13 +5,22 @@ const concat = require('gulp-concat-util');
 const pump = require('pump');
 
 const source = 'source';
-const entry = source + '/*.js';
 const name = 'lineemotes.plugin.js';
 const betterdiscord = process.env.appdata + '/BetterDiscord/plugins/';
 const build = 'dist';
 
 const deploy = false; // copy built plugin directly into BetterDiscord
 
+const entry = [
+    `./${source}/__lineemotes.plugin.js`,
+    `./${source}/_categories.js`,
+    `./${source}/_menu.js`,
+    `./${source}/_observer.js`,
+    `./${source}/_pack.js`,
+    `./${source}/_preview.js`,
+    `./${source}/_storage.js`,
+    `./${source}/_stylesheet.js`
+];
 
 gulp.task('build', ['build:css'], function (callback) {
     var tasks = [
